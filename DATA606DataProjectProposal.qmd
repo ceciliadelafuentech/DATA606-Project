@@ -1,0 +1,246 @@
+---
+title: "DATA 606 Data Project Proposal"
+author: "Cecilia De La Fuente Chavez"
+format: html
+editor: visual
+---
+
+## Maple Syrup Yield and Sugaring Season Temperature
+
+### Data Preparation
+
+Load libraries
+
+```{r}
+library(tidyverse)
+```
+
+Weather data
+
+```{r}
+#read weather data txt file
+weather <- read_table(
+  "climdiv-tmpcst-v1.0.0-20261006.txt",
+  col_names = FALSE
+) %>%
+  select(-X14) %>% #remove extra blank column
+  rename( #rename columns with month abbreviations
+    id = X1,
+    jan = X2,
+    feb = X3,
+    mar = X4,
+    apr = X5,
+    may = X6,
+    jun = X7,
+    jul = X8,
+    aug = X9,
+    sep = X10,
+    oct = X11,
+    nov = X12,
+    dec = X13
+  ) %>%
+  mutate( #extract information from id based on NOAA documentation
+    state_code = substr(id, 1, 3),
+    division = substr(id, 4, 4),
+    element = substr(id, 5, 6),
+    year = as.integer(substr(id, 7, 10))
+  ) %>%
+  mutate(
+    across(
+      jan:dec,
+      ~ na_if(.x, -99.9) #replace missing values (-99.9) with NA
+    )
+  )
+```
+
+Subset data by state and year
+
+```{r}
+maple_states_weather <- weather %>%
+  filter( #Maine, Michigan, New Hampshire, New York, Pennsylvania, Vermont, and Wisconsin
+    state_code %in% c("017", "020", "027", "030", 
+                      "036", "043", "047"),
+    division == "0", #0 indicates an area-averaged element
+    element == "02", # 02 = Average Temperature
+    year >= 2001,
+    year <= 2026
+  )
+```
+
+Average sugaring season temperature and add state column
+
+```{r}
+maple_states_weather <- maple_states_weather %>%
+  mutate(
+    avg_temp = rowMeans(
+      select(., feb, mar, apr), #average temperature with sugaring months
+      na.rm = FALSE
+    )
+  ) %>%
+  mutate(
+  state = recode(
+    state_code, #create new state column
+    "017" = "Maine",
+    "020" = "Michigan",
+    "027" = "New Hampshire",
+    "030" = "New York",
+    "036" = "Pennsylvania",
+    "043" = "Vermont",
+    "047" = "Wisconsin"
+  )
+)
+```
+
+Select relevant columns in new dataframe
+
+```{r}
+maple_avg_temp <- maple_states_weather %>%
+  select(state, year, avg_temp)
+```
+
+Yield data
+
+```{r}
+#read yield data csv file
+yield <- read_csv("2C6116DA-646B-3D00-8F9F-03225D4D016B.csv") %>%
+  select(State, Year, Value) %>% #select relevant columns
+  rename( #rename columns
+    state = State,
+    year = Year,
+    gal_tap = Value
+  ) %>%
+  mutate( #change capitalization to match weather data states
+    state = str_to_title(state)
+  )
+```
+
+Combine datasets
+
+```{r}
+maple_analysis <- yield %>%
+  left_join(maple_avg_temp, by = c("state", "year")) %>%
+  select(state, year, avg_temp, gal_tap)
+
+head(maple_analysis)
+```
+
+### Research question
+
+**Is average temperature during the maple sugaring season (February–April) associated with syrup yield per tap across seven U.S. states from 2001–2026?**
+
+**Null hypothesis (H₀):** There is no association between February–April average temperature and maple syrup yield per tap, after accounting for year and state.
+
+**Alternative hypothesis (H₁):** There is an association between February–April average temperature and maple syrup yield per tap, after accounting for year and state.
+
+### Cases
+
+Each case represents one state in one year. The dataset includes seven maple-producing states (Maine, Michigan, New Hampshire, New York, Pennsylvania, Vermont, and Wisconsin) across 26 years (2001–2026), for a total of **182 observations.**
+
+### Data collection
+
+This project will use two publicly available datasets:
+
+1.  [**USDA National Agricultural Statistics Service (NASS):**](https://quickstats.nass.usda.gov/) Annual maple syrup yield, measured in gallons per tap, for the seven selected states from 2001–2026.
+
+2.  [**NOAA nClimDiv:**](https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc:C00005) Monthly statewide average temperature data. Observations for February, March, and April will be used to calculate the average temperature during the sugaring season for each state and year.
+
+The datasets will be combined by state and year so that each observation includes the corresponding yield and average temperature.
+
+### Study type
+
+This is an **observational** study because the project uses historical yield and weather data. The analysis will examine associations rather than establish causation.
+
+### Data sources
+
+[USDA NASS Quick Stats](https://quickstats.nass.usda.gov/) Retrieved 11/04/2026
+
+[NOAA nClimDiv Monthly Data](https://www.ncei.noaa.gov/data/nclimdiv-monthly/access/) Retrieved 11/04/2026
+
+### Variables
+
+**Response variable:**
+
+- Maple syrup yield per tap: Numerical variable, measured in gallons per tap.
+
+**Explanatory variables:**
+
+- Average sugaring-season temperature: Numerical variable, calculated as the average of February, March, and April temperatures for each state and year. This is the primary explanatory variable.
+
+- Year: Numerical variable ranging from 2001–2026.
+
+**Categorical variable:**
+
+- State: Categorical variable identifying the seven states
+
+### Summary statistics
+
+Overall
+
+```{r}
+summary_overall <- maple_analysis %>%
+  summarise(
+    across(
+      c(avg_temp, gal_tap),
+      list(
+        mean = ~mean(.x, na.rm = TRUE),
+        median = ~median(.x, na.rm = TRUE),
+        sd = ~sd(.x, na.rm = TRUE),
+        min = ~min(.x, na.rm = TRUE),
+        max = ~max(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  )
+
+summary_overall
+```
+
+By state
+
+```{r}
+summary_by_state <- maple_analysis %>%
+  group_by(state) %>%
+  summarise(
+    across(
+      c(avg_temp, gal_tap),
+      list(
+        mean = ~mean(.x, na.rm = TRUE),
+        median = ~median(.x, na.rm = TRUE),
+        sd = ~sd(.x, na.rm = TRUE),
+        min = ~min(.x, na.rm = TRUE),
+        max = ~max(.x, na.rm = TRUE)
+      ),
+      .names = "{.col}_{.fn}"
+    ),
+    .groups = "drop"
+  )
+
+summary_by_state
+```
+
+Average temperature vs. maple syrup yield
+
+```{r}
+ggplot(maple_analysis, aes(x = avg_temp, y = gal_tap)) +
+  geom_point() +
+  labs(
+    title = "Average Temperature vs. Maple Syrup Yield",
+    x = "Average Temperature (°F)",
+    y = "Gallons per Tap"
+  ) +
+  theme_minimal()
+```
+
+Maple syrup yield over time by state
+
+```{r}
+ggplot(maple_analysis, aes(x = year, y = gal_tap, color = state)) +
+  geom_line() +
+  labs(
+    title = "Maple Syrup Yield Over Time",
+    x = "Year",
+    y = "Gallons per Tap",
+    color = "State"
+  ) +
+  theme_minimal()
+```
