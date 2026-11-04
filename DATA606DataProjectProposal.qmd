@@ -4,6 +4,9 @@ author: "Cecilia De La Fuente Chavez"
 format: html
 execute:
   echo: true
+  output: false
+  message: false
+  warning: false
 editor: visual
 ---
 
@@ -119,6 +122,7 @@ yield <- read_csv("https://raw.githubusercontent.com/ceciliadelafuentech/DATA606
 Combine datasets
 
 ```{r}
+#| output: true
 maple_analysis <- yield %>%
   left_join(maple_avg_temp, by = c("state", "year")) %>%
   select(state, year, avg_temp, gal_tap)
@@ -176,53 +180,38 @@ This is an **observational** study because the project uses historical yield and
 
 ### Summary statistics
 
-Overall
+Temperature summary by state
 
 ```{r}
-summary_overall <- maple_analysis %>%
-  summarise(
-    across(
-      c(avg_temp, gal_tap),
-      list(
-        mean = ~mean(.x, na.rm = TRUE),
-        median = ~median(.x, na.rm = TRUE),
-        sd = ~sd(.x, na.rm = TRUE),
-        min = ~min(.x, na.rm = TRUE),
-        max = ~max(.x, na.rm = TRUE)
-      ),
-      .names = "{.col}_{.fn}"
-    )
-  )
-
-summary_overall
-```
-
-By state
-
-```{r}
-summary_by_state <- maple_analysis %>%
+#| output: true
+maple_analysis %>%
   group_by(state) %>%
   summarise(
-    across(
-      c(avg_temp, gal_tap),
-      list(
-        mean = ~mean(.x, na.rm = TRUE),
-        median = ~median(.x, na.rm = TRUE),
-        sd = ~sd(.x, na.rm = TRUE),
-        min = ~min(.x, na.rm = TRUE),
-        max = ~max(.x, na.rm = TRUE)
-      ),
-      .names = "{.col}_{.fn}"
-    ),
-    .groups = "drop"
+    mean = mean(avg_temp, na.rm = TRUE),
+    sd = sd(avg_temp, na.rm = TRUE),
+    min = min(avg_temp, na.rm = TRUE),
+    max = max(avg_temp, na.rm = TRUE)
   )
+```
 
-summary_by_state
+Yield summary by state
+
+```{r}
+#| output: true
+maple_analysis %>%
+  group_by(state) %>%
+  summarise(
+    mean = mean(gal_tap, na.rm = TRUE),
+    sd = sd(gal_tap, na.rm = TRUE),
+    min = min(gal_tap, na.rm = TRUE),
+    max = max(gal_tap, na.rm = TRUE)
+  )
 ```
 
 Average temperature vs. maple syrup yield
 
 ```{r}
+#| output: true
 ggplot(maple_analysis, aes(x = avg_temp, y = gal_tap)) +
   geom_point() +
   labs(
@@ -236,6 +225,7 @@ ggplot(maple_analysis, aes(x = avg_temp, y = gal_tap)) +
 Maple syrup yield over time by state
 
 ```{r}
+#| output: true
 ggplot(maple_analysis, aes(x = year, y = gal_tap, color = state)) +
   geom_line() +
   labs(
