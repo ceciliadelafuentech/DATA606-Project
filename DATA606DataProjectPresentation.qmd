@@ -1,0 +1,345 @@
+---
+title: "Maple Syrup Yield and <br>Sugaring Season Temperature"
+subtitle: "Examining the relationship between February–April average temperature and maple syrup yield per tap across seven U.S. states, 2001–2026."
+author: "<br><br>Cecilia De La Fuente Chavez | DATA606 | Final Project"
+format:
+  revealjs:
+    theme: serif
+    width: 1600
+    height: 900
+    margin: 0.05
+    center: true
+    slide-number: c/t
+    include-in-header:
+      text: |
+        <style>
+          /* deep brown color for all text */
+          .reveal,
+          .reveal h1,
+          .reveal h2,
+          .reveal h3,
+          .reveal h4,
+          .reveal p,
+          .reveal li {
+            color: #3E2723 !important;
+          }
+
+          /* Title slide left-alignment */
+          #title-slide {
+            text-align: left;
+          }
+          #title-slide .quarto-title-authors {
+            justify-content: flex-start;
+          }
+          #title-slide .quarto-title-author {
+            padding-left: 0;
+          }
+        </style>
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+library(tidyverse)
+#read weather data txt file
+weather <- read_table(
+  "https://raw.githubusercontent.com/ceciliadelafuentech/DATA606-Project/refs/heads/main/climdiv-tmpcst-v1.0.0-20261006.txt",
+  col_names = FALSE
+) %>%
+  select(-X14) %>% #remove extra blank column
+  rename( #rename columns with month abbreviations
+    id = X1,
+    jan = X2,
+    feb = X3,
+    mar = X4,
+    apr = X5,
+    may = X6,
+    jun = X7,
+    jul = X8,
+    aug = X9,
+    sep = X10,
+    oct = X11,
+    nov = X12,
+    dec = X13
+  ) %>%
+  mutate( #extract information from id based on NOAA documentation
+    state_code = substr(id, 1, 3),
+    division = substr(id, 4, 4),
+    element = substr(id, 5, 6),
+    year = as.integer(substr(id, 7, 10))
+  ) %>%
+  mutate(
+    across(
+      jan:dec,
+      ~ na_if(.x, -99.9) #replace missing values (-99.9) with NA
+    )
+  )
+maple_states_weather <- weather %>%
+  filter( #Maine, Michigan, New Hampshire, New York, Pennsylvania, Vermont, and Wisconsin
+    state_code %in% c("017", "020", "027", "030", 
+                      "036", "043", "047"),
+    division == "0", #0 indicates an area-averaged element
+    element == "02", # 02 = Average Temperature
+    year >= 2001,
+    year <= 2026
+  )
+maple_states_weather <- maple_states_weather %>%
+  mutate(
+    avg_temp = rowMeans(
+      select(., feb, mar, apr), #average temperature with sugaring months
+      na.rm = FALSE
+    )
+  ) %>%
+  mutate(
+    state = recode(
+      state_code, #create new state column
+      "017" = "Maine",
+      "020" = "Michigan",
+      "027" = "New Hampshire",
+      "030" = "New York",
+      "036" = "Pennsylvania",
+      "043" = "Vermont",
+      "047" = "Wisconsin"
+    )
+  )
+maple_avg_temp <- maple_states_weather %>%
+  select(state, year, avg_temp)
+#read yield data csv file
+yield <- read_csv("https://raw.githubusercontent.com/ceciliadelafuentech/DATA606-Project/refs/heads/main/2C6116DA-646B-3D00-8F9F-03225D4D016B.csv") %>%
+  select(State, Year, Value) %>% #select relevant columns
+  rename( #rename columns
+    state = State,
+    year = Year,
+    gal_tap = Value
+  ) %>%
+  mutate( #change capitalization to match weather data states
+    state = str_to_title(state)
+  )
+maple_analysis <- yield %>%
+  left_join(maple_avg_temp, by = c("state", "year")) %>%
+  select(state, year, avg_temp, gal_tap)
+```
+
+## Abstract
+
+::: {style="font-size: 0.75em;"}
+
+<br><br>
+
+This study examines the relationship between February–April average temperature and maple syrup yield per tap across seven U.S. states from 2001 to 2026. Annual yield data from the USDA National Agricultural Statistics Service (NASS) were combined with statewide monthly temperature data from NOAA, producing 182 state-year observations.
+
+A multiple linear regression model was used to assess the association between average temperature and yield while accounting for differences in year and state. Average temperature had a statistically significant negative association with yield, while year had a statistically significant positive association. The model explained approximately 69.7% of the variation in yield per tap.
+
+Yield increased over the study period, while average temperatures fluctuated without a comparable long-term trend. This suggests that average temperature alone does not explain changes in maple syrup yield over time. Because this is an observational study, the findings indicate associations rather than causation. Future research incorporating freeze-thaw patterns, temperatures preceding the sugaring season, and other environmental and production-related factors could provide a more complete understanding of how climate variability relates to maple syrup production.
+
+:::
+
+## Overview
+
+::: {style="font-size: 0.75em;"}
+
+<br>
+
+**Does February–April average temperature predict maple syrup yield per tap across seven U.S. states from 2001–2026, after accounting for differences in year and state?**
+
+<br>
+
+*7 states · 26 years · 182 state-year observations*
+
+**Response variable:**
+
+- Maple syrup yield per tap: Numerical variable, measured in gallons per tap.
+
+**Explanatory variables:**
+
+- Average sugaring season temperature: Numerical variable, calculated as the average of February, March, and April temperatures for each state and year. This is the primary explanatory variable.
+
+- Year: Numerical variable ranging from 2001–2026.
+
+**Categorical variable:**
+
+- State: Categorical variable identifying the seven states
+
+**Sources:** USDA NASS, NOAA nClimDiv.
+
+:::
+
+## Summary statistics
+
+**Average temperature and maple syrup yield by state**
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+maple_analysis %>%
+  group_by(state) %>%
+  summarise(
+    mean_temp = mean(avg_temp, na.rm = TRUE),
+    sd_temp = sd(avg_temp, na.rm = TRUE),
+    mean_yield = mean(gal_tap, na.rm = TRUE),
+    sd_yield = sd(gal_tap, na.rm = TRUE)
+  )
+```
+
+- Pennsylvania had the warmest average February–April temperatures (38.7°F), while Maine had the coldest (28.5°F). Temperature variability was relatively similar across states (SD: 2.7–3.8°F).
+
+- Vermont (0.298 gal/tap) and Wisconsin (0.286 gal/tap) had the highest average yields, while Pennsylvania had the lowest (0.204 gal/tap).
+
+- Wisconsin had the greatest variability in yield (SD: 0.110 gal/tap), roughly twice that of most other states.
+
+## Average temperature vs. maple syrup yield
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 9
+#| fig-height: 5
+ggplot(maple_analysis,
+       aes(x = avg_temp, y = gal_tap, color = state)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Average Feb-Apr Temperature vs. Maple Syrup Yield",
+    x = "Average Temperature (°F)",
+    y = "Gallons per Tap",
+    color = "State"
+  ) +
+  theme_minimal()
+```
+
+- The relationship between temperature and yield was weak and inconsistent across states: five showed slightly positive trends, while Michigan and Wisconsin showed negative trends. This motivated using multiple regression to account for year and state.
+
+## Maple syrup yield over time
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 9
+#| fig-height: 5
+ggplot(maple_analysis, aes(x = year, y = gal_tap, color = state)) +
+  geom_line() +
+  labs(
+    title = "Maple Syrup Yield Over Time",
+    x = "Year",
+    y = "Gallons per Tap",
+    color = "State"
+  ) +
+  theme_minimal()
+```
+
+- Yield generally increased across all seven states from 2001 to 2026, with states often rising and falling together. After 2012, yields diverged more, with Wisconsin reaching higher levels and Pennsylvania remaining lower.
+
+## Average temperature over time
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-width: 9
+#| fig-height: 5
+ggplot(maple_analysis, aes(x = year, y = avg_temp, color = state)) +
+  geom_line() +
+  labs(
+    title = "Average Feb-Apr Temperature Over Time",
+    x = "Year",
+    y = "Average Temperature (°F)",
+    color = "State"
+  ) +
+  theme_minimal()
+```
+
+- February–April temperatures fluctuated year to year without a comparable long-term upward trend, while yield generally increased. This suggests that other factors beyond seasonal average temperature may contribute to the increase in yield.
+
+## Multiple linear regression
+
+::: {style="font-size: 0.75em;"}
+
+**Model:** Yield per tap = β₀ + β₁ (Avg. temperature) + β₂ (Year) + State + error
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+model <- lm(gal_tap ~ avg_temp + year + state, data = maple_analysis)
+options(scipen = 999)
+summary(model)
+```
+
+- Each 1°F increase in February–April average temperature is associated with a decrease of approximately 0.0036 gal/tap in yield (p \< 0.001), holding year and state constant.
+
+- Yield increased by approximately 0.0073 gal/tap per year (p \< 0.001), after accounting for temperature and state.
+
+- The model explains approximately 69.7% of the variation in yield per tap (adjusted R² = 0.683).
+
+:::
+
+## Model fit, diagnostics and additional testing
+
+::: {style="font-size: 0.75em;"}
+
+**Confidence intervals:**
+
+- The 95% confidence intervals for temperature and year both exclude zero, supporting the significant associations found in the regression.
+
+**Model diagnostics:**
+
+- Residual plots showed no major patterns suggesting problems with linearity or constant variance.
+
+- The Q-Q plot showed some departures from normality in the tails.
+
+- Three unusual observations were identified in Wisconsin, but they were within the state's observed yield range.
+
+**State-specific temperature effects:**
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+model_interaction <- lm(
+  gal_tap ~ avg_temp * state + year,
+  data = maple_analysis
+)
+anova(model, model_interaction)
+```
+
+- Tested whether temperature-yield relationships differed across states using an interaction model.
+
+- The interaction terms did not significantly improve model fit (F = 0.75, p = 0.610), so the simpler model with a common temperature slope was retained.
+
+:::
+
+## Conclusion
+
+- After accounting for year and state, February-April average temperature had a statistically significant negative association with maple syrup yield per tap.
+
+- Yield increased over the study period, while seasonal temperatures showed no comparable long-term trend.
+
+- The model explained about 69.7% of the variation in yield. The association did not differ significantly across states.
+
+- The estimated reduction of 0.0036 gal/tap per 1°F increase is relatively small per tap (approximately one tablespoon).
+
+- However, the cumulative difference could be more meaningful across larger operations with thousands of taps.
+
+## Limitations and future research
+
+- Seasonal average temperature may not capture the specific temperature patterns that influence sap flow.
+
+- Other factors, such as precipitation, tree conditions, and tapping practices, were not included.
+
+- This is an observational study, so it shows association, not causation.
+
+- Examine freeze-thaw frequency and timing.
+
+- Incorporate temperatures preceding the sugaring season.
+
+- Explore additional environmental and production related factors, including the economic implications of yield changes.
+
+## Thank you
+
+<https://github.com/ceciliadelafuentech/DATA606-Project>
+
+<https://ceciliadelafuentech.github.io/DATA606-Project/DATA606DataProject.html>
